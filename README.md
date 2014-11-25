@@ -7,17 +7,19 @@ PDL::IO::CSV - Create PDL from CSV file (optimized for speed and large data)
     use PDL;
     use PDL::IO::CSV ':all';
 
-    my $pdl = rcsv2D($csv_filename_or_filehandle);
+    my $pdl = rcsv2D('input.csv');
+    $pdl *= 2;
+    wcsv2D($pdl, 'double.csv');
+
+    my ($pdl1, $pdl2, $pdl3) = rcsv1D('input.csv', [0, 1, 6]);
+    wcsv1D($pdl1, 'col2.csv');
     #or
-    my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids);
-    #or
-    my $pdl = rcsv2D($csv_filename_or_filehandle, \%options);
-    #or
-    my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids, \%options);
+    $pdl2->wcsv1D('col2.csv');
+    $pdl2->wcsv1D('col2_tabs.csv', {sep_char=>"\t"});
 
 # DESCRIPTION
 
-The traditionall way of creating PDL piddle from CSV data is via [rcols](https://metacpan.org/pod/PDL::IO::Misc#rcols) function.
+The traditional way of creating PDL piddle from CSV data is via [rcols](https://metacpan.org/pod/PDL::IO::Misc#rcols) function.
 
     my $pdl = rcols("data.csv", [1..4], { DEFTYPE=>double, COLSEP=>"," });
 
@@ -25,6 +27,14 @@ This module provides alternative implementation based on [Text::CSV\_XS](https:/
 traditional approach.
 
 # FUNCTIONS
+
+By default, PDL::IO::DBI doesn't import any function. You can import individual functions like this:
+
+    use IUP qw(rcsv2D wcsv2D);
+
+Or import all available functions:
+
+    use IUP ':all';
 
 ## rcsv1D
 
@@ -38,31 +48,42 @@ Loads data from CSV file into 1D piddles (separate for each column).
     #or
     my ($pdl1, $pdl2, $pdl3) = rcsv1D($csv_filename_or_filehandle, \@column_ids, \%options);
 
-Items supported in `options` hash:
+Parameters:
+
+- csv\_filename\_or\_filehandle
+
+    Path to CSV file to be loaded or a filehandle open for reading.
+
+- column\_ids
+
+    Optional column indices (0-based) defining which columns to load from CSV file.
+    Default is `undef` which means to load all columns.
+
+Items supported in **options** hash:
 
 - type
 
     Defines the type of output piddles: `double`, `float`, `longlong`, `long`, `short`, `byte`.
-    Default value is `double`.
+    Default value is `double`. **BEWARE:** type \`longlong\` can be used only on perls with 64bitint support.
 
     You can set one type for all columns/piddles:
 
         my ($a, $b, $c) = rcsv1D($csv, {type => double});
 
-    or separately for each colum/piddle:
+    or separately for each column/piddle:
 
         my ($a, $b, $c) = rcsv1D($csv, {type => [long, double, double]});
 
 - fetch\_chunk
 
-    We do not try to load all CSV data into memory at once, we load them in chunks defined by this parameter.
+    We do not try to load all CSV data into memory at once; we load them in chunks defined by this parameter.
     Default value is `40000` (CSV rows).
 
 - reshape\_inc
 
     As we do not try to load the whole CSV file into memory at once, we also do not know at the beginning how
     many rows there will be. Therefore we do not know how big piddle to allocate, we have to incrementally
-    (re)alocated the piddle by increments defined by this parameter. Default value is `80000`.
+    (re)allocated the piddle by increments defined by this parameter. Default value is `80000`.
 
     If you know how many rows there will be you can improve performance by setting this parameter to expected row count.
 
@@ -112,7 +133,7 @@ Loads data from CSV file into 2D piddle.
     #or
     my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids, \%options);
 
-Items supported in `options` hash are the same as by ["rcsv1D"](#rcsv1d).
+Parameters and items supported in `options` hash are the same as by ["rcsv1D"](#rcsv1d).
 
 ## wcsv1D
 
@@ -126,10 +147,20 @@ Saves data from one or more 1D piddles to CSV file.
     #or
     wcsv1D($pdl1, $pdl2);
 
-    # but also
+    # but also as a piddle method
     $pdl1D->wcsv1D("file.csv");
 
-Items supported in `options` hash:
+Parameters:
+
+- piddles
+
+    One or more 1D piddles. All has to be 1D but may have different count of elements.
+
+- csv\_filename\_or\_filehandle
+
+    Path to CSV file to write to or a filehandle open for writing. Default is STDOUT.
+
+Items supported in **options** hash:
 
 - header
 
@@ -169,10 +200,10 @@ Saves data from one 2D piddle to CSV file.
     #or
     wcsv2D($pdl);
 
-    # but also
+    # but also as a piddle method
     $pdl->wcsv2D("file.csv");
 
-Items supported in `options` hash are the same as by ["wcsv1D"](#wcsv1d).
+Parameters and items supported in `options` hash are the same as by ["wcsv1D"](#wcsv1d).
 
 # SEE ALSO
 

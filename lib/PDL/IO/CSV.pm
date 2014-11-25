@@ -8,13 +8,18 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK   = qw(rcsv1D rcsv2D wcsv1D wcsv2D);
 our %EXPORT_TAGS = (all => \@EXPORT_OK);
 
-our $VERSION = '0.003';
+our $VERSION = '0.004';
 
-use constant DEBUG => $ENV{PDL_IO_CSV_DEBUG} ? 1 : 0;
+use Config;
+use constant NO64BITINT => (($Config{use64bitint} // '') eq 'define' || $Config{longsize} >= 8) ? 0 : 1;
+use constant DEBUG      => $ENV{PDL_IO_CSV_DEBUG} ? 1 : 0;
 
 use PDL;
 use Text::CSV_XS;
 use Scalar::Util qw(looks_like_number openhandle);
+
+use Carp;
+$Carp::Internal{ (__PACKAGE__) }++;
 
 sub import {
   my $package = shift;
@@ -55,13 +60,14 @@ sub wcsv1D {
 
   while (ref $_[0] eq 'PDL') {
     $c_pdl[$cols] = shift;
-    die "FATAL: wcsv1D() expects 1D piddles" unless $c_pdl[$cols]->ndims == 1;
+    croak "FATAL: wcsv1D() expects 1D piddles" unless $c_pdl[$cols]->ndims == 1;
     $c_size[$cols]       = PDL::Core::howbig($c_pdl[$cols]->get_datatype);
     $c_dataref[$cols]    = $c_pdl[$cols]->get_dataref;
     $c_offset[$cols]     = 0;
     my $type             = $c_pdl[$cols]->type;
     my $dim              = $c_pdl[$cols]->dim(0);
     $c_pack[$cols]       = $pck{$type};
+    croak "FATAL: your perl does not support 64bitint (avoid using type longlong)" if $c_pack[$cols] eq 'q' && NO64BITINT;
     $c_max_offset[$cols] = $c_size[$cols] * $dim;
     $rows = $dim if $rows < $dim;
     if ($bad2empty && $c_pdl[$cols]->check_badflag) {
@@ -72,9 +78,9 @@ sub wcsv1D {
     $cols++;
   }
 
-  my $csv = Text::CSV_XS->new($C) or die "" . Text::CSV_XS->error_diag();
+  my $csv = Text::CSV_XS->new($C) or croak "" . Text::CSV_XS->error_diag();
   if ($O->{header}) {
-    die "FATAL: wrong header (expected $cols items)" if $cols != scalar @{$O->{header}};
+    croak "FATAL: wrong header (expected $cols items)" if $cols != scalar @{$O->{header}};
     $csv->print($fh, $O->{header});
   }
   for my $r (0..$rows-1) {
@@ -100,7 +106,7 @@ sub wcsv2D {
   my $pdl = shift;
   my ($fh, $O, $C) = _proc_wargs(@_);
 
-  die "FATAL: wcsv2D() expects 2D piddle" unless $pdl->ndims == 2;
+  croak "FATAL: wcsv2D() expects 2D piddle" unless $pdl->ndims == 2;
   my $p = $pdl->transpose;
 
   my ($cols, $rows) = $p->dims;
@@ -108,6 +114,7 @@ sub wcsv2D {
   my $size = PDL::Core::howbig($p->get_datatype);
   my $packC = $pck{$type} . "[$cols]";
   my $pack1 = $pck{$type};
+  croak "FATAL: your perl does not support 64bitint (avoid using type longlong)" if $pck{$type} eq 'q' && NO64BITINT;
   my $dataref = $p->get_dataref;
   my $offset = 0;
   my $colsize = $size * $cols;
@@ -119,10 +126,10 @@ sub wcsv2D {
     $bad = substr($$d, 0, $size); # raw bytes representind BAD value
   }
 
-  my $csv = Text::CSV_XS->new($C) or die "" . Text::CSV_XS->error_diag();
+  my $csv = Text::CSV_XS->new($C) or croak "" . Text::CSV_XS->error_diag();
   if ($O->{header}) {
     my $n = scalar @{$O->{header}};
-    die "FATAL: wrong header (expected $cols items, got $n)" if $cols != $n;
+    croak "FATAL: wrong header (expected $cols items, got $n)" if $cols != $n;
     $csv->print($fh, $O->{header});
   }
   while ($offset <= $max_offset) {
@@ -144,7 +151,7 @@ sub rcsv1D {
 
   my ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $allocated, $cols); # initialize after we get 1st line
 
-  my $csv = Text::CSV_XS->new($C) or die "" . Text::CSV_XS->error_diag();
+  my $csv = Text::CSV_XS->new($C) or croak "" . Text::CSV_XS->error_diag();
   my $processed = 0;
   my $finished = 0;
   my $chunk = $O->{fetch_chunk};
@@ -226,7 +233,7 @@ sub rcsv1D {
       for my $ci (0..$cols-1) {
         my $len = length $bytes[$ci];
         my $expected_len = $c_sizeof->[$ci] * $rows;
-        die "FATAL: len mismatch $len != $expected_len" if $len != $expected_len;
+        croak "FATAL: len mismatch $len != $expected_len" if $len != $expected_len;
         substr(${$c_dataref->[$ci]}, $c_idx->[$ci], $len) = $bytes[$ci];
         $c_idx->[$ci] += $expected_len;
       }
@@ -253,7 +260,7 @@ sub rcsv2D {
 
   my ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $allocated, $cols);
 
-  my $csv = Text::CSV_XS->new($C) or die "" . Text::CSV_XS->error_diag();
+  my $csv = Text::CSV_XS->new($C) or croak "" . Text::CSV_XS->error_diag();
   my $processed = 0;
   my $c_idx = 0;
   my $finished;
@@ -335,7 +342,7 @@ sub rcsv2D {
       }
       my $len = length $bytes;
       my $expected_len = $c_sizeof * $cols * $rows;
-      die "FATAL: len mismatch $len != $expected_len" if $len != $expected_len;
+      croak "FATAL: len mismatch $len != $expected_len" if $len != $expected_len;
       substr($$c_dataref, $c_idx, $len) = $bytes;
       $c_idx += $len;
     }
@@ -382,7 +389,7 @@ sub _proc_wargs {
   $C->{eol}      = "\n" unless defined $C->{eol};
 
   if (defined $O->{header}) {
-    die "FATAL: header should be arrayref" unless ref $O->{header} eq 'ARRAY';
+    croak "FATAL: header should be arrayref" unless ref $O->{header} eq 'ARRAY';
   }
 
   my $fh;
@@ -393,7 +400,7 @@ sub _proc_wargs {
     $fh = $filename_or_fh;
   }
   else {
-    open $fh, ">", $filename_or_fh or die "$filename_or_fh: $!";
+    open $fh, ">", $filename_or_fh or croak "$filename_or_fh: $!";
   }
   binmode $fh, $O->{encoding} if $O->{encoding};
 
@@ -404,8 +411,8 @@ sub _proc_rargs {
   my $options = ref $_[-1] eq 'HASH' ? pop : {};
   my ($filename_or_fh, $coli) = @_;
 
-  die "FATAL: invalid column ids" if defined $coli && ref $coli ne 'ARRAY';
-  die "FATAL: invalid filename"   unless defined $filename_or_fh;
+  croak "FATAL: invalid column ids" if defined $coli && ref $coli ne 'ARRAY';
+  croak "FATAL: invalid filename"   unless defined $filename_or_fh;
   my $C = { %$options }; # make a copy
 
   # get options related to this module the rest will be passed to Text::CSV_XS
@@ -428,14 +435,14 @@ sub _proc_rargs {
     $C->{empty_is_undef} = 1;
   }
 
-  die "FATAL: cannot use decimal_comma + sep_char ','" if $O->{decimal_comma} && $C->{sep_char} eq ',';
+  croak "FATAL: cannot use decimal_comma + sep_char ','" if $O->{decimal_comma} && $C->{sep_char} eq ',';
 
   my $fh;
   if (openhandle($filename_or_fh)) {
     $fh = $filename_or_fh;
   }
   else {
-    open $fh, "<", $filename_or_fh or die "$filename_or_fh: $!";
+    open $fh, "<", $filename_or_fh or croak "$filename_or_fh: $!";
   }
   binmode $fh, $O->{encoding} if $O->{encoding};
 
@@ -451,9 +458,9 @@ sub _init_1D {
   }
   else {
     $cols = scalar @$coli;
-    ($_<0 || $_>$colcount) and die "FATAL: invalid column '$_' (column count=$colcount)" for (@$coli);
+    ($_<0 || $_>$colcount) and croak "FATAL: invalid column '$_' (column count=$colcount)" for (@$coli);
   }
-  die "FATAL: invalid column count" unless $cols && $cols > 0 && $cols <= $colcount;
+  croak "FATAL: invalid column count" unless $cols && $cols > 0 && $cols <= $colcount;
 
   my @c_type;
   my @c_pack;
@@ -474,7 +481,8 @@ sub _init_1D {
   for (0..$cols-1) {
     $c_type[$_] = double if !defined $c_type[$_];
     $c_pack[$_] = $pck{$c_type[$_]};
-    die "FATAL: invalid type '$c_type[$_]' for column $_" if !$c_pack[$_];
+    croak "FATAL: your perl does not support 64bitint (avoid using type longlong)" if $c_pack[$_] eq 'q' && NO64BITINT;
+    croak "FATAL: invalid type '$c_type[$_]' for column $_" if !$c_pack[$_];
     $c_sizeof[$_] = length pack($c_pack[$_], 1);
     $c_pdl[$_] = zeroes($c_type[$_], $allocated);
     $c_dataref[$_] = $c_pdl[$_]->get_dataref;
@@ -482,7 +490,7 @@ sub _init_1D {
     $c_idx[$_] = 0;
 
     my $big = PDL::Core::howbig($c_pdl[$_]->get_datatype);
-    die "FATAL: column $_ mismatch (type=$c_type[$_], sizeof=$c_sizeof[$_], big=$big)" if $big != $c_sizeof[$_];
+    croak "FATAL: column $_ mismatch (type=$c_type[$_], sizeof=$c_sizeof[$_], big=$big)" if $big != $c_sizeof[$_];
   }
 
   return (\@c_type, \@c_pack, \@c_sizeof, \@c_pdl, \@c_bad, \@c_dataref, \@c_idx, $allocated, $cols);
@@ -497,13 +505,14 @@ sub _init_2D {
   }
   else {
     $cols = scalar @$coli;
-    ($_<0 || $_>$colcount) and die "FATAL: invalid column '$_' (column count=$colcount)" for (@$coli);
+    ($_<0 || $_>$colcount) and croak "FATAL: invalid column '$_' (column count=$colcount)" for (@$coli);
   }
-  die "FATAL: invalid column count" unless $cols && $cols > 0 && $cols <= $colcount;
+  croak "FATAL: invalid column count" unless $cols && $cols > 0 && $cols <= $colcount;
 
   my $c_type = $O->{type};
   my $c_pack = $pck{$c_type};
-  die "FATAL: invalid type '$c_type' for column $_" if !$c_pack;
+  croak "FATAL: your perl does not support 64bitint (avoid using type longlong)" if $c_pack eq 'q' && NO64BITINT;
+  croak "FATAL: invalid type '$c_type' for column $_" if !$c_pack;
 
   my $allocated = $O->{reshape_inc};
   my $c_sizeof = length pack($c_pack, 1);
@@ -512,7 +521,7 @@ sub _init_2D {
   my $c_bad = $c_pdl->badvalue;
 
   my $big = PDL::Core::howbig($c_pdl->get_datatype);
-  die "FATAL: column $_ size mismatch (type=$c_type, sizeof=$c_sizeof, big=$big)" if $big != $c_sizeof;
+  croak "FATAL: column $_ size mismatch (type=$c_type, sizeof=$c_sizeof, big=$big)" if $big != $c_sizeof;
 
   return ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $allocated, $cols);
 }
@@ -530,17 +539,19 @@ PDL::IO::CSV - Create PDL from CSV file (optimized for speed and large data)
   use PDL;
   use PDL::IO::CSV ':all';
 
-  my $pdl = rcsv2D($csv_filename_or_filehandle);
+  my $pdl = rcsv2D('input.csv');
+  $pdl *= 2;
+  wcsv2D($pdl, 'double.csv');
+
+  my ($pdl1, $pdl2, $pdl3) = rcsv1D('input.csv', [0, 1, 6]);
+  wcsv1D($pdl1, 'col2.csv');
   #or
-  my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids);
-  #or
-  my $pdl = rcsv2D($csv_filename_or_filehandle, \%options);
-  #or
-  my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids, \%options);
+  $pdl2->wcsv1D('col2.csv');
+  $pdl2->wcsv1D('col2_tabs.csv', {sep_char=>"\t"});
 
 =head1 DESCRIPTION
 
-The traditionall way of creating PDL piddle from CSV data is via L<rcols|PDL::IO::Misc/rcols> function.
+The traditional way of creating PDL piddle from CSV data is via L<rcols|PDL::IO::Misc/rcols> function.
 
  my $pdl = rcols("data.csv", [1..4], { DEFTYPE=>double, COLSEP=>"," });
 
@@ -548,6 +559,14 @@ This module provides alternative implementation based on L<Text::CSV_XS> which s
 traditional approach.
 
 =head1 FUNCTIONS
+
+By default, PDL::IO::DBI doesn't import any function. You can import individual functions like this:
+
+ use IUP qw(rcsv2D wcsv2D);
+
+Or import all available functions:
+
+ use IUP ':all';
 
 =head2 rcsv1D
 
@@ -561,33 +580,48 @@ Loads data from CSV file into 1D piddles (separate for each column).
   #or
   my ($pdl1, $pdl2, $pdl3) = rcsv1D($csv_filename_or_filehandle, \@column_ids, \%options);
 
-Items supported in C<options> hash:
+Parameters:
+
+=over
+
+=item csv_filename_or_filehandle
+
+Path to CSV file to be loaded or a filehandle open for reading.
+
+=item column_ids
+
+Optional column indices (0-based) defining which columns to load from CSV file.
+Default is C<undef> which means to load all columns.
+
+=back
+
+Items supported in B<options> hash:
 
 =over
 
 =item type
 
 Defines the type of output piddles: C<double>, C<float>, C<longlong>, C<long>, C<short>, C<byte>.
-Default value is C<double>.
+Default value is C<double>. B<BEWARE:> type `longlong` can be used only on perls with 64bitint support.
 
 You can set one type for all columns/piddles:
 
   my ($a, $b, $c) = rcsv1D($csv, {type => double});
 
-or separately for each colum/piddle:
+or separately for each column/piddle:
 
   my ($a, $b, $c) = rcsv1D($csv, {type => [long, double, double]});
 
 =item fetch_chunk
 
-We do not try to load all CSV data into memory at once, we load them in chunks defined by this parameter.
+We do not try to load all CSV data into memory at once; we load them in chunks defined by this parameter.
 Default value is C<40000> (CSV rows).
 
 =item reshape_inc
 
 As we do not try to load the whole CSV file into memory at once, we also do not know at the beginning how
 many rows there will be. Therefore we do not know how big piddle to allocate, we have to incrementally
-(re)alocated the piddle by increments defined by this parameter. Default value is C<80000>.
+(re)allocated the piddle by increments defined by this parameter. Default value is C<80000>.
 
 If you know how many rows there will be you can improve performance by setting this parameter to expected row count.
 
@@ -639,7 +673,7 @@ Loads data from CSV file into 2D piddle.
   #or
   my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids, \%options);
 
-Items supported in C<options> hash are the same as by L</rcsv1D>.
+Parameters and items supported in C<options> hash are the same as by L</rcsv1D>.
 
 =head2 wcsv1D
 
@@ -653,10 +687,24 @@ Saves data from one or more 1D piddles to CSV file.
   #or
   wcsv1D($pdl1, $pdl2);
 
-  # but also
+  # but also as a piddle method
   $pdl1D->wcsv1D("file.csv");
 
-Items supported in C<options> hash:
+Parameters:
+
+=over
+
+=item piddles
+
+One or more 1D piddles. All has to be 1D but may have different count of elements.
+
+=item csv_filename_or_filehandle
+
+Path to CSV file to write to or a filehandle open for writing. Default is STDOUT.
+
+=back
+
+Items supported in B<options> hash:
 
 =over
 
@@ -700,10 +748,10 @@ Saves data from one 2D piddle to CSV file.
   #or
   wcsv2D($pdl);
 
-  # but also
+  # but also as a piddle method
   $pdl->wcsv2D("file.csv");
 
-Items supported in C<options> hash are the same as by L</wcsv1D>.
+Parameters and items supported in C<options> hash are the same as by L</wcsv1D>.
 
 =head1 SEE ALSO
 
