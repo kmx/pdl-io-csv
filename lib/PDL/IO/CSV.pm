@@ -541,7 +541,7 @@ The traditionall way of creating PDL piddle from CSV data is via L<rcols|PDL::IO
 
  my $pdl = rcols("data.csv", [1..4], { DEFTYPE=>double, COLSEP=>"," });
 
-This module provides alternative implementation based L<Text::CSV_XS> which should be significantly faster than
+This module provides alternative implementation based on L<Text::CSV_XS> which should be significantly faster than
 traditional approach.
 
 =head1 FUNCTIONS
