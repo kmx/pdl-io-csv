@@ -4,6 +4,9 @@ PDL::IO::CSV - Create PDL from CSV file (optimized for speed and large data)
 
 # SYNOPSIS
 
+    use PDL;
+    use PDL::IO::CSV ':all';
+
     my $pdl = rcsv2D($csv_filename_or_filehandle);
     #or
     my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids);
@@ -18,7 +21,7 @@ The traditionall way of creating PDL piddle from CSV data is via [rcols](https:/
 
     my $pdl = rcols("data.csv", [1..4], { DEFTYPE=>double, COLSEP=>"," });
 
-This module provides alternative implementation based [Text::CSV\_XS](https://metacpan.org/pod/Text::CSV_XS) which should be significantly faster than
+This module provides alternative implementation based on [Text::CSV\_XS](https://metacpan.org/pod/Text::CSV_XS) which should be significantly faster than
 traditional approach.
 
 # FUNCTIONS

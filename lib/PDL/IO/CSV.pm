@@ -527,6 +527,9 @@ PDL::IO::CSV - Create PDL from CSV file (optimized for speed and large data)
 
 =head1 SYNOPSIS
 
+  use PDL;
+  use PDL::IO::CSV ':all';
+
   my $pdl = rcsv2D($csv_filename_or_filehandle);
   #or
   my $pdl = rcsv2D($csv_filename_or_filehandle, \@column_ids);
