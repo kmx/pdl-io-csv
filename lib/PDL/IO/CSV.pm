@@ -532,7 +532,7 @@ __END__
 
 =head1 NAME
 
-PDL::IO::CSV - Create PDL from CSV file (optimized for speed and large data)
+PDL::IO::CSV - Load/save PDL from/to CSV file (optimized for speed and large data)
 
 =head1 SYNOPSIS
 
@@ -558,15 +558,17 @@ The traditional way of creating PDL piddle from CSV data is via L<rcols|PDL::IO:
 This module provides alternative implementation based on L<Text::CSV_XS> which should be significantly faster than
 traditional approach.
 
+PDL::IO::CSV supports reading CSV data and creating PDL piddle(s) as well as saving PDL data to CSV file.
+
 =head1 FUNCTIONS
 
-By default, PDL::IO::DBI doesn't import any function. You can import individual functions like this:
+By default, PDL::IO::CSV doesn't import any function. You can import individual functions like this:
 
- use IUP qw(rcsv2D wcsv2D);
+ use PDL::IO::CSV qw(rcsv2D wcsv2D);
 
 Or import all available functions:
 
- use IUP ':all';
+ use PDL::IO::CSV ':all';
 
 =head2 rcsv1D
 

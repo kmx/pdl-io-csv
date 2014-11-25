@@ -1,9 +1,9 @@
 Changes for PDL::IO::CSV
 
-0.004   2014/11/XX
+0.004   2014/11/26
         - doc improvements
         - replace die() with croak()
-        - better warrnings for perls without 64bitint
+        - better warnings for perls without 64bitint
 
 0.003   2014/11/25
         - first public release
