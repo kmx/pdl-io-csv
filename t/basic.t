@@ -2,13 +2,13 @@ use strict;
 use warnings;
 
 use Test::More;
-use DBI;
 use PDL;
 use PDL::IO::CSV ':all';
 use Test::Number::Delta relative => 0.00001;
 use Config;
 
-my $use64bitint = (($Config{use64bitint} // '') eq 'define' || $Config{longsize} >= 8) ? 1 : 0;
+use constant NO64BITINT => (($Config{use64bitint} || '') eq 'define' || $Config{longsize} >= 8) ? 0 : 1;
+diag "No support for 64bitint - some tests will be skipped" if NO64BITINT;
 
 my $tab1 = [
         [    1,    1  ,    -32768,    -2147483648,    -9223372036854775808,    -3.40282347e+37 ,    -1.79769313486231571e+307    ],
@@ -46,7 +46,7 @@ my $tab2 = [
 ];
 
 ### TAB1
-if ($use64bitint) {
+if (!NO64BITINT) {
   my $t1  = rcsv2D('t/_sample1.csv');
   my $t1h = rcsv2D('t/_sample1_crlf.csv');
   my @p1  = rcsv1D('t/_sample1.csv');
@@ -88,7 +88,7 @@ is($p2f[1]->info, "PDL: Float D [24]",    '$p2f[1]->info');
 is($p2f[2]->info, "PDL: Float D [24]",    '$p2f[2]->info');
 is($p2f[3]->info, "PDL: Float D [24]",    '$p2f[3]->info');
 
-if ($use64bitint) {
+if (!NO64BITINT) {
   my @p2x = rcsv1D('t/_sample2.csv', {type=>[short, long, longlong, float], empty2bad=>1});
   is($p2x[0]->info, "PDL: Short D [24]",    '$p2x[0]->info');
   is($p2x[1]->info, "PDL: Long D [24]",     '$p2x[1]->info');
