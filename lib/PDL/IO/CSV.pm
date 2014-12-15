@@ -160,6 +160,8 @@ sub rcsv1D {
   my $dec_comma = $O->{decimal_comma};
 
   warn "Fetching 1D " . _dbg_msg($O, $C) . "\n" if $O->{debug};
+  # skip headers
+  $csv->getline($fh) for (1..$O->{header});
   while (!$finished) {
     my $rows = 0;
     my @bytes;
@@ -170,7 +172,6 @@ sub rcsv1D {
         unless (defined $c_type) {
           ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $allocated, $cols) = _init_1D($coli, scalar @$r, $O);
           warn "Initialized size=$allocated, cols=$cols, type=".join(",",@$c_type)."\n" if $O->{debug};
-          next if $O->{header};
         }
         if ($dec_comma) {
           for (@$r) { s/,/./ if defined $_ };
@@ -272,6 +273,8 @@ sub rcsv2D {
   my $bcount = 0;
 
   warn "Fetching 2D " . _dbg_msg($O, $C) . "\n" if $O->{debug};
+  # skip headers
+  $csv->getline($fh) for (1..$O->{header});
   while (!$finished) {
     my $bytes = '';
     my $rows = 0;
@@ -421,6 +424,7 @@ sub _proc_rargs {
   $O->{fetch_chunk} ||= 40_000;
   $O->{reshape_inc} ||= 80_000;
   $O->{type}        ||= double;
+  $O->{header}      ||= 0;
   $O->{debug} = DEBUG unless defined $O->{debug};
 
   # reshape_inc cannot be lower than fetch_chunk
@@ -601,7 +605,7 @@ Items supported in B<options> hash:
 
 =over
 
-=item type
+=item * type
 
 Defines the type of output piddles: C<double>, C<float>, C<longlong>, C<long>, C<short>, C<byte>.
 Default value is C<double>. B<BEWARE:> type `longlong` can be used only on perls with 64bitint support.
@@ -614,12 +618,12 @@ or separately for each column/piddle:
 
   my ($a, $b, $c) = rcsv1D($csv, {type => [long, double, double]});
 
-=item fetch_chunk
+=item * fetch_chunk
 
 We do not try to load all CSV data into memory at once; we load them in chunks defined by this parameter.
 Default value is C<40000> (CSV rows).
 
-=item reshape_inc
+=item * reshape_inc
 
 As we do not try to load the whole CSV file into memory at once, we also do not know at the beginning how
 many rows there will be. Therefore we do not know how big piddle to allocate, we have to incrementally
@@ -627,39 +631,39 @@ many rows there will be. Therefore we do not know how big piddle to allocate, we
 
 If you know how many rows there will be you can improve performance by setting this parameter to expected row count.
 
-=item empty2bad
+=item * empty2bad
 
 Values C<0> (default) or C<1> - convert empty cells to BAD values (there is a performance cost when turned on).
-If not enabled the BAD values are silently converted into C<0>.
+If not enabled the empty values are silently converted into C<0>.
 
-=item text2bad
+=item * text2bad
 
 Values C<0> (default) or C<1> - convert values that don't pass L<looks_like_number|Scalar::Util/looks_like_number>
 check to BAD values (there is a significant performance cost when turned on). If not enabled these non-numerical
 values are silently converted into C<0>.
 
-=item header
+=item * header
 
-Values C<0> (default) or C<1> - consider the first line as column headers (it is ignored but must have the same count
-of columns as the rest of the CSV file).
+Values C<0> (default) or C<N> (positive integer) - consider the first C<N> lines as headers and skip them.
+BEWARE: we are talking here about skipping CSV lines which in some cases might be more than 1 text line.
 
-=item decimal_comma
+=item * decimal_comma
 
 Values C<0> (default) or C<1> - accept C<,> (comma) as a decimal separator (there is a performance cost when turned on).
 
-=item encoding
+=item * encoding
 
 Optional enconding e.g. C<:utf8> (default C<undef>) that will be applied on input filehandle.
 
-=item debug
+=item * debug
 
 Values C<0> (default) or C<1> - turn on/off debug messages
 
-=item sep_char
+=item * sep_char
 
 Value separator, default value C<,> (comma).
 
-=item and all other options valid for L<new|Text::CSV_XS/new> method of L<Text::CSV_XS>
+=item * and all other options valid for L<new|Text::CSV_XS/new> method of L<Text::CSV_XS>
 
 =back
 
@@ -710,31 +714,31 @@ Items supported in B<options> hash:
 
 =over
 
-=item header
+=item * header
 
 Arrayref with values that will be printed as the first CSV line.
 
-=item bad2empty
+=item * bad2empty
 
 Values C<0> or C<1> (default) - convert BAD values into empty strings (there is a performance cost when turned on).
 
-=item encoding
+=item * encoding
 
 Optional enconding e.g. C<:utf8> (default C<undef>) that will be applied on output filehandle.
 
-=item debug
+=item * debug
 
 Values C<0> (default) or C<1> - turn on/off debug messages
 
-=item sep_char
+=item * sep_char
 
 Value separator, default value C<,> (comma).
 
-=item eol
+=item * eol
 
 New line separator, default value C<\n> (UNIX newline).
 
-=item and all other options valid for L<new|Text::CSV_XS/new> method of L<Text::CSV_XS>
+=item * and all other options valid for L<new|Text::CSV_XS/new> method of L<Text::CSV_XS>
 
 =back
 

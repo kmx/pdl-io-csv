@@ -127,4 +127,12 @@ is($t3x->at(2,0), 'BAD', '$t3x->at(2,0)');
 is($t3x->at(3,1), 'BAD', '$t3x->at(3,1)');
 is($t3x->at(4,2), 'BAD', '$t3x->at(4,2)');
 
+{
+  my $csv = "H1,H2,H3\nH1,H2,H3\n1,2,3\n1,2,3\n1,2,3";
+  my $p1   = rcsv2D(\$csv, {header=>2});
+  my @p2   = rcsv1D(\$csv, {header=>2});
+  is($p1->info, "PDL: Double D [2,3]");
+  is($p2[0]->info, "PDL: Double D [3]");
+}
+
 done_testing;
