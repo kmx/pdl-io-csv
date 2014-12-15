@@ -92,7 +92,7 @@ Items supported in **options** hash:
 - empty2bad
 
     Values `0` (default) or `1` - convert empty cells to BAD values (there is a performance cost when turned on).
-    If not enabled the BAD values are silently converted into `0`.
+    If not enabled the empty values are silently converted into `0`.
 
 - text2bad
 
@@ -102,8 +102,8 @@ Items supported in **options** hash:
 
 - header
 
-    Values `0` (default) or `1` - consider the first line as column headers (it is ignored but must have the same count
-    of columns as the rest of the CSV file).
+    Values `0` (default) or `N` (positive integer) - consider the first `N` lines as headers and skip them.
+    BEWARE: we are talking here about skipping CSV lines which in some cases might be more than 1 text line.
 
 - decimal\_comma
 

@@ -1,5 +1,10 @@
 Changes for PDL::IO::CSV
 
+0.006   2014/12/15
+        - require PDL 2.006 as we need unpdl()
+        - doc update: reading/writing from/to scalar variables
+        - enhanced header param by rcsv* functions
+
 0.005   2014/11/26
         - perl 5.8.9 compatibility
 
