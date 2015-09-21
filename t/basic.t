@@ -7,7 +7,7 @@ use PDL::IO::CSV ':all';
 use Test::Number::Delta relative => 0.00001;
 use Config;
 
-use constant NO64BITINT => (($Config{use64bitint} || '') eq 'define' || $Config{longsize} >= 8) ? 0 : 1;
+use constant NO64BITINT => ($Config{ivsize} < 8) ? 1 : 0;
 diag "No support for 64bitint - some tests will be skipped" if NO64BITINT;
 
 my $tab1 = [

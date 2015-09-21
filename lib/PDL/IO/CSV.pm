@@ -8,10 +8,11 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK   = qw(rcsv1D rcsv2D wcsv1D wcsv2D);
 our %EXPORT_TAGS = (all => \@EXPORT_OK);
 
-our $VERSION = '0.006';
+our $VERSION = '0.007';
 
 use Config;
-use constant NO64BITINT => (($Config{use64bitint} || '') eq 'define' || $Config{longsize} >= 8) ? 0 : 1;
+use constant NO64BITINT => ($Config{ivsize} < 8) ? 1 : 0;
+use constant NODATETIME => eval { require PDL::DateTime; require Time::Moment; 1 } ? 0 : 1;
 use constant DEBUG      => $ENV{PDL_IO_CSV_DEBUG} ? 1 : 0;
 
 use PDL;
@@ -149,7 +150,7 @@ sub wcsv2D {
 sub rcsv1D {
   my ($fh, $coli, $O, $C) = _proc_rargs(@_);
 
-  my ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $allocated, $cols); # initialize after we get 1st line
+  my ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $c_dt, $allocated, $cols); # initialize after we get 1st line
 
   my $csv = Text::CSV_XS->new($C) or croak "" . Text::CSV_XS->error_diag();
   my $processed = 0;
@@ -161,7 +162,8 @@ sub rcsv1D {
 
   warn "Fetching 1D " . _dbg_msg($O, $C) . "\n" if $O->{debug};
   # skip headers
-  $csv->getline($fh) for (1..$O->{header});
+  my $headerline;
+  $headerline = $csv->getline($fh) for (1..$O->{header});
   while (!$finished) {
     my $rows = 0;
     my @bytes;
@@ -170,7 +172,7 @@ sub rcsv1D {
       my $r = $csv->getline($fh);
       if (defined $r) {
         unless (defined $c_type) {
-          ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $allocated, $cols) = _init_1D($coli, scalar @$r, $O);
+          ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $c_dt, $allocated, $cols) = _init_1D($coli, $r, $O);
           warn "Initialized size=$allocated, cols=$cols, type=".join(",",@$c_type)."\n" if $O->{debug};
         }
         if ($dec_comma) {
@@ -186,6 +188,22 @@ sub rcsv1D {
           else {
             for (0..$cols-1) {
               unless (defined $r->[$_]) { $r->[$_] = $c_bad->[$_]; $c_pdl->[$_]->badflag(1) }
+            }
+          }
+        }
+        if (defined $c_dt) {
+          for (0..$cols-1) {
+            next unless defined $c_dt->[$_];
+            my $v = eval {
+              my $tm = Time::Moment->from_string(_fix_datetime_value($r->[$_]));
+              $tm->epoch * 1_000_000 + $tm->millisecond;
+            };
+            if (defined $v) {
+              $r->[$_] = $v;
+            }
+            else {
+              $r->[$_] = $c_bad->[$_];
+              $c_pdl->[$_]->badflag(1);
             }
           }
         }
@@ -242,13 +260,15 @@ sub rcsv1D {
   }
 
   #XXX close $fh;
-
   if (ref $c_pdl eq 'ARRAY') {
     if ($processed != $allocated) {
       warn "Reshape to: '$processed' (final)\n" if $O->{debug};
       $c_pdl->[$_]->reshape($processed) for (0..$cols-1);
     }
     $c_pdl->[$_]->upd_data for (0..$cols-1);
+    if (ref $headerline eq 'ARRAY') {
+      $c_pdl->[$_]->hdr->{col_name} = $headerline->[$_] for (0..$cols-1);
+    }
     return @$c_pdl;
   }
 
@@ -419,7 +439,7 @@ sub _proc_rargs {
   my $C = { %$options }; # make a copy
 
   # get options related to this module the rest will be passed to Text::CSV_XS
-  my @keys = qw/ reshape_inc fetch_chunk type debug empty2bad text2bad header decimal_comma encoding /;
+  my @keys = qw/ reshape_inc fetch_chunk type debug empty2bad text2bad header decimal_comma encoding detect_datetime /;
   my $O = { map { $_ => delete $C->{$_} } @keys };
   $O->{fetch_chunk} ||= 40_000;
   $O->{reshape_inc} ||= 80_000;
@@ -454,8 +474,8 @@ sub _proc_rargs {
 }
 
 sub _init_1D {
-  my ($coli, $colcount, $O) = @_;
-
+  my ($coli, $firstline, $O) = @_;
+  my $colcount = scalar @$firstline;
   my $cols;
   if (!defined $coli) {    # take all columns
     $cols = $colcount;
@@ -476,9 +496,27 @@ sub _init_1D {
 
   if (ref $O->{type} eq 'ARRAY') {
     @c_type = @{$O->{type}};
+    push @c_type, ((double) x ($cols - @c_type));
   }
   else {
     $c_type[$_] = $O->{type} for (0..$cols-1);
+  }
+
+  my @c_dt;
+  for (0..$cols-1) {
+    if ($c_type[$_] eq 'datetime') {
+      croak "PDL::DateTime not installed" if NODATETIME;
+      $c_type[$_] = longlong;
+      $c_dt[$_] = 'datetime';
+    }
+    elsif ($O->{detect_datetime}) {
+      croak "PDL::DateTime not installed" if NODATETIME;
+      my $str = _fix_datetime_value($firstline->[$_]);
+      if (eval { Time::Moment->from_string($str) }) {
+        $c_type[$_] = longlong;
+        $c_dt[$_] = 'datetime';
+      }
+    }
   }
 
   my $allocated = $O->{reshape_inc};
@@ -488,16 +526,15 @@ sub _init_1D {
     croak "FATAL: your perl does not support 64bitint (avoid using type longlong)" if $c_pack[$_] eq 'q' && NO64BITINT;
     croak "FATAL: invalid type '$c_type[$_]' for column $_" if !$c_pack[$_];
     $c_sizeof[$_] = length pack($c_pack[$_], 1);
-    $c_pdl[$_] = zeroes($c_type[$_], $allocated);
+    $c_pdl[$_] = $c_dt[$_] ? PDL::DateTime->new(zeroes(longlong, $allocated)) : zeroes($c_type[$_], $allocated);
     $c_dataref[$_] = $c_pdl[$_]->get_dataref;
     $c_bad[$_] = $c_pdl[$_]->badvalue;
     $c_idx[$_] = 0;
-
     my $big = PDL::Core::howbig($c_pdl[$_]->get_datatype);
     croak "FATAL: column $_ mismatch (type=$c_type[$_], sizeof=$c_sizeof[$_], big=$big)" if $big != $c_sizeof[$_];
   }
 
-  return (\@c_type, \@c_pack, \@c_sizeof, \@c_pdl, \@c_bad, \@c_dataref, \@c_idx, $allocated, $cols);
+  return (\@c_type, \@c_pack, \@c_sizeof, \@c_pdl, \@c_bad, \@c_dataref, \@c_idx, (@c_dt > 0 ? \@c_dt : undef), $allocated, $cols);
 }
 
 sub _init_2D {
@@ -528,6 +565,17 @@ sub _init_2D {
   croak "FATAL: column $_ size mismatch (type=$c_type, sizeof=$c_sizeof, big=$big)" if $big != $c_sizeof;
 
   return ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $allocated, $cols);
+}
+
+sub _fix_datetime_value {
+  my $v = shift;
+  # '2015-12-29' > '2015-12-29T00Z'
+  return $v."T00Z" if $v =~ /^\d\d\d\d-\d\d-\d\d$/;
+  # '2015-12-29 11:59' > '2015-12-29 11:59Z'
+  return $v."Z"    if $v =~ /^\d\d\d\d-\d\d-\d\d[ T]\d\d:\d\d$/;
+  # '2015-12-29 11:59:11' > '2015-12-29 11:59:11Z' or '2015-12-29 11:59:11.123' > '2015-12-29 11:59:11.123Z'
+  return $v."Z"    if $v =~ /^\d\d\d\d-\d\d-\d\d[ T]\d\d:\d\d:\d\d(\.\d+)?$/;
+  return $v;
 }
 
 1;
@@ -617,6 +665,20 @@ You can set one type for all columns/piddles:
 or separately for each column/piddle:
 
   my ($a, $b, $c) = rcsv1D($csv, {type => [long, double, double]});
+
+Special datetime handling (you need to have L<PDL::DateTime> installed):
+
+  my ($a, $b, $c) = rcsv1D($csv, {type => [long, 'datetime', double]});
+  # piddle $b will be an instance of PDL::DateTime
+
+or you cat let PDL::IO::CSV try to detect datetime columns (detection is based only on the first csv line)
+
+  my ($a, $b, $c) = rcsv1D($csv, {detect_datetime=>1});
+
+=item * detect_datetime
+
+Values C<0> (default) or C<1>. Try to detect datetime columns, corresponding output piddles will be
+instances of L<PDL::Datetime> (which you need to have installed).
 
 =item * fetch_chunk
 
