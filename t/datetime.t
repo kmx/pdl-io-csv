@@ -23,6 +23,20 @@ else {
   is($Date->min,   1252627200000000);
   is($Date->max,   1268179200000000);
   is($Date->sum, 156283344000000000);
+
+  wcsv1D(sequence(3)+0.5, ones(3), PDL::DateTime->new_sequence('2015-12-12', 3, 'day'), \my $out1);
+  is($out1, <<'MARKER');
+0.5,1,2015-12-12
+1.5,1,2015-12-13
+2.5,1,2015-12-14
+MARKER
+
+  wcsv1D(sequence(3)+0.5, ones(3)+0.5, PDL::DateTime->new_sequence('1955-12-12 23:23:55.123999', 3, 'minute'), \my $out1);
+  is($out1, <<'MARKER');
+0.5,1.5,1955-12-12T23:23:55.123999
+1.5,1.5,1955-12-12T23:24:55.123999
+2.5,1.5,1955-12-12T23:25:55.123999
+MARKER
 }
 
 done_testing;

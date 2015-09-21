@@ -76,6 +76,20 @@ Items supported in **options** hash:
 
         my ($a, $b, $c) = rcsv1D($csv, {type => [long, double, double]});
 
+    Special datetime handling (you need to have [PDL::DateTime](https://metacpan.org/pod/PDL::DateTime) installed):
+
+        my ($a, $b, $c) = rcsv1D($csv, {type => [long, 'datetime', double]});
+        # piddle $b will be an instance of PDL::DateTime
+
+    or you cat let PDL::IO::CSV try to detect datetime columns (detection is based only on the first csv line)
+
+        my ($a, $b, $c) = rcsv1D($csv, {detect_datetime=>1});
+
+- detect\_datetime
+
+    Values `0` (default) or `1`. Try to detect datetime columns, corresponding output piddles will be
+    instances of [PDL::Datetime](https://metacpan.org/pod/PDL::Datetime) (which you need to have installed).
+
 - fetch\_chunk
 
     We do not try to load all CSV data into memory at once; we load them in chunks defined by this parameter.
@@ -151,6 +165,8 @@ Saves data from one or more 1D piddles to CSV file.
 
     # but also as a piddle method
     $pdl1D->wcsv1D("file.csv");
+
+NOTE: piddles piddles are instances of [PDL::DateTime](https://metacpan.org/pod/PDL::DateTime) are exported by wcsv1D as ISO 8601 strings.
 
 Parameters:
 

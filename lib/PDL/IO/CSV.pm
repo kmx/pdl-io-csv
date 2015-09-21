@@ -17,7 +17,7 @@ use constant DEBUG      => $ENV{PDL_IO_CSV_DEBUG} ? 1 : 0;
 
 use PDL;
 use Text::CSV_XS;
-use Scalar::Util qw(looks_like_number openhandle);
+use Scalar::Util qw(looks_like_number openhandle blessed);
 
 use Carp;
 $Carp::Internal{ (__PACKAGE__) }++;
@@ -59,7 +59,7 @@ sub wcsv1D {
 
   my $bad2empty = $O->{bad2empty};
 
-  while (ref $_[0] eq 'PDL') {
+  while (blessed $_[0] && $_[0]->isa('PDL')) {
     $c_pdl[$cols] = shift;
     croak "FATAL: wcsv1D() expects 1D piddles" unless $c_pdl[$cols]->ndims == 1;
     $c_size[$cols]       = PDL::Core::howbig($c_pdl[$cols]->get_datatype);
@@ -90,10 +90,15 @@ sub wcsv1D {
       if ($c_max_offset[$c] >= $c_offset[$c]) {
         if ($bad2empty && $c_bad[$c]) {
           my $v = substr(${$c_dataref[$c]}, $c_offset[$c], $c_size[$c]);
-          $v[$c] = unpack($c_pack[$c], $v) if $v ne $c_bad[$c];
+          if ($v ne $c_bad[$c]) {
+            $v[$c] = unpack($c_pack[$c], $v);
+            $v[$c] = PDL::DateTime::ll2dt($v[$c]) if ref $c_pdl[$c] eq 'PDL::DateTime';
+          }
         }
         else {
-          $v[$c] = unpack($c_pack[$c], substr(${$c_dataref[$c]}, $c_offset[$c], $c_size[$c]));
+          my $v = substr(${$c_dataref[$c]}, $c_offset[$c], $c_size[$c]);
+          $v[$c] = unpack($c_pack[$c], $v);
+          $v[$c] = PDL::DateTime::ll2dt($v[$c]) if ref $c_pdl[$c] eq 'PDL::DateTime';
         }
       }
       $c_offset[$c] += $c_size[$c];
@@ -194,10 +199,7 @@ sub rcsv1D {
         if (defined $c_dt) {
           for (0..$cols-1) {
             next unless defined $c_dt->[$_];
-            my $v = eval {
-              my $tm = Time::Moment->from_string(_fix_datetime_value($r->[$_]));
-              $tm->epoch * 1_000_000 + $tm->millisecond;
-            };
+            my $v = PDL::DateTime::dt2ll($r->[$_]);
             if (defined $v) {
               $r->[$_] = $v;
             }
@@ -373,7 +375,7 @@ sub rcsv2D {
 
   #XXX close $fh;
 
-  if (ref $c_pdl eq 'PDL') {
+  if (blessed $c_pdl && $c_pdl->isa('PDL')) {
     if ($processed != $allocated) {
       warn "Reshaping to $processed (final)\n" if $O->{debug};
       $c_pdl->reshape($cols, $processed); # allocate the exact size
@@ -398,7 +400,7 @@ sub _dbg_msg {
 
 sub _proc_wargs {
   my $options        = ref $_[-1] eq 'HASH' ? pop : {};
-  my $filename_or_fh = ref $_[-1] ne 'PDL'  ? pop : undef;
+  my $filename_or_fh = !blessed $_[-1] || !$_[-1]->isa('PDL') ? pop : undef;
 
   my $C = { %$options }; # make a copy
 
@@ -511,8 +513,7 @@ sub _init_1D {
     }
     elsif ($O->{detect_datetime}) {
       croak "PDL::DateTime not installed" if NODATETIME;
-      my $str = _fix_datetime_value($firstline->[$_]);
-      if (eval { Time::Moment->from_string($str) }) {
+      if (defined PDL::DateTime::dt2ll($firstline->[$_])) {
         $c_type[$_] = longlong;
         $c_dt[$_] = 'datetime';
       }
@@ -757,6 +758,8 @@ Saves data from one or more 1D piddles to CSV file.
 
   # but also as a piddle method
   $pdl1D->wcsv1D("file.csv");
+
+NOTE: piddles piddles are instances of L<PDL::DateTime> are exported by wcsv1D as ISO 8601 strings.
 
 Parameters:
 

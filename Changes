@@ -2,6 +2,7 @@ Changes for PDL::IO::CSV
 
 0.007   2015/09/XX
         - rcsv1D: PDL::DateTime support via type=>'datetime' and detect_datetime=>1
+        - wcsv1D: PDL::DateTime support
 
 0.006   2014/12/15
         - require PDL 2.006 as we need unpdl()
