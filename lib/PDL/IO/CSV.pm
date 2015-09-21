@@ -168,7 +168,20 @@ sub rcsv1D {
   warn "Fetching 1D " . _dbg_msg($O, $C) . "\n" if $O->{debug};
   # skip headers
   my $headerline;
-  $headerline = $csv->getline($fh) for (1..$O->{header});
+  my $headerdetection;
+  if (looks_like_number($O->{header})) {
+    if ($O->{header} == 1) {
+      # get the header line (only if skipping exactly 1 line)
+      $headerline = $csv->getline($fh);
+    }
+    else {
+      $csv->getline($fh) for (1..$O->{header});
+    }
+  }
+  elsif ($O->{header} && $O->{header} eq 'auto') {
+    $headerdetection = 1;
+  }
+
   while (!$finished) {
     my $rows = 0;
     my @bytes;
@@ -176,6 +189,16 @@ sub rcsv1D {
     while ($rows < $chunk) {
       my $r = $csv->getline($fh);
       if (defined $r) {
+        if (defined $headerdetection) {
+          my $numeric = 0;
+          for (@$r) { $numeric++ if looks_like_number($_) || (!NODATETIME && defined PDL::DateTime::dt2ll($_)) }
+          if ($numeric == 0) {
+            # no numeric values found => skip this line but keep it as a potential header
+            $headerline = $r;
+            next;
+          }
+          $headerdetection = undef;
+        }
         unless (defined $c_type) {
           ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $c_dt, $allocated, $cols) = _init_1D($coli, $r, $O);
           warn "Initialized size=$allocated, cols=$cols, type=".join(",",@$c_type)."\n" if $O->{debug};
@@ -269,7 +292,9 @@ sub rcsv1D {
     }
     $c_pdl->[$_]->upd_data for (0..$cols-1);
     if (ref $headerline eq 'ARRAY') {
-      $c_pdl->[$_]->hdr->{col_name} = $headerline->[$_] for (0..$cols-1);
+      for (0..$cols-1) {
+        $c_pdl->[$_]->hdr->{col_name} = $headerline->[$_] if $headerline->[$_] && $headerline->[$_] ne '';
+      };
     }
     return @$c_pdl;
   }
@@ -414,7 +439,16 @@ sub _proc_wargs {
   $C->{eol}      = "\n" unless defined $C->{eol};
 
   if (defined $O->{header}) {
-    croak "FATAL: header should be arrayref" unless ref $O->{header} eq 'ARRAY';
+    croak "FATAL: header should be arrayref" unless ref $O->{header} eq 'ARRAY' || $O->{header} eq 'auto';
+    if ($O->{header} eq 'auto') {
+      my @n;
+      my $count = 0;
+      for (@_) {
+        push @n, my $n = $_->hdr->{col_name};
+        $count++ if defined $n;
+      }
+      $O->{header} = $count > 0 ? \@n : undef;
+    }
   }
 
   my $fh;
@@ -710,6 +744,11 @@ values are silently converted into C<0>.
 Values C<0> (default) or C<N> (positive integer) - consider the first C<N> lines as headers and skip them.
 BEWARE: we are talking here about skipping CSV lines which in some cases might be more than 1 text line.
 
+NOTE: header values (if any) are considered to be column names and are stored in loaded piddles in $pdl->hdr->{col_name}
+
+NOTE: C<rcsv1D> accepts a special C<header> value C<'auto'> which skips rows (from beginning) that have
+in all columns non-numeric values.
+
 =item * decimal_comma
 
 Values C<0> (default) or C<1> - accept C<,> (comma) as a decimal separator (there is a performance cost when turned on).
@@ -781,7 +820,8 @@ Items supported in B<options> hash:
 
 =item * header
 
-Arrayref with values that will be printed as the first CSV line.
+Arrayref with values that will be printed as the first CSV line. Or C<'auto'> value which means that column
+names are taken from $pdl->hdr->{col_name}.
 
 =item * bad2empty
 

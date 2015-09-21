@@ -119,6 +119,11 @@ Items supported in **options** hash:
     Values `0` (default) or `N` (positive integer) - consider the first `N` lines as headers and skip them.
     BEWARE: we are talking here about skipping CSV lines which in some cases might be more than 1 text line.
 
+    NOTE: header values (if any) are considered to be column names and are stored in loaded piddles in $pdl->hdr->{col\_name}
+
+    NOTE: `rcsv1D` accepts a special `header` value `'auto'` which skips rows (from beginning) that have
+    in all columns non-numeric values.
+
 - decimal\_comma
 
     Values `0` (default) or `1` - accept `,` (comma) as a decimal separator (there is a performance cost when turned on).
@@ -182,7 +187,8 @@ Items supported in **options** hash:
 
 - header
 
-    Arrayref with values that will be printed as the first CSV line.
+    Arrayref with values that will be printed as the first CSV line. Or `'auto'` value which means that column
+    names are taken from $pdl->hdr->{col\_name}.
 
 - bad2empty
 

@@ -31,12 +31,37 @@ else {
 2.5,1,2015-12-14
 MARKER
 
-  wcsv1D(sequence(3)+0.5, ones(3)+0.5, PDL::DateTime->new_sequence('1955-12-12 23:23:55.123999', 3, 'minute'), \my $out2);
+  wcsv1D(sequence(3)+0.5, ones(3)+0.5, PDL::DateTime->new_sequence('1955-12-12 23:23:55.123999', 3, 'minute'), \my $out2, { header=>'auto' });
   is($out2, <<'MARKER');
 0.5,1.5,1955-12-12T23:23:55.123999
 1.5,1.5,1955-12-12T23:24:55.123999
 2.5,1.5,1955-12-12T23:25:55.123999
 MARKER
+
+  my $x = sequence(3)+0.5; $x->hdr->{col_name} = 'col x';
+  my $y = ones(3)+0.5; # without col_name
+  my $z = PDL::DateTime->new_sequence('1955-12-12 23:23:55.123999', 3, 'minute'); $z->hdr->{col_name} = 'col z';
+  wcsv1D($x, $y, $z, \my $out3, { header=>'auto' });
+  is($out3, <<'MARKER');
+"col x",,"col z"
+0.5,1.5,1955-12-12T23:23:55.123999
+1.5,1.5,1955-12-12T23:24:55.123999
+2.5,1.5,1955-12-12T23:25:55.123999
+MARKER
+
+  my ($px, $py, $pz) = rcsv1D(\<<'MARKER', { header=>'auto', detect_datetime=>1 });
+"col x",,"col z"
+0.5,1.5,1955-12-12T23:23:55.123999
+1.5,1.5,1955-12-12T23:24:55.123999
+2.5,1.5,1955-12-12T23:25:55.123999
+MARKER
+
+  is("$px", "[0.5 1.5 2.5]");
+  is("$py", "[1.5 1.5 1.5]");
+  is("$pz", "[ 1955-12-12T23:23:55.123999 1955-12-12T23:24:55.123999 1955-12-12T23:25:55.123999 ]");
+  is($px->hdr->{col_name}, "col x");
+  is($py->hdr->{col_name}, undef);
+  is($pz->hdr->{col_name}, "col z");
 }
 
 done_testing;
