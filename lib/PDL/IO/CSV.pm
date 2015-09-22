@@ -481,6 +481,7 @@ sub _proc_rargs {
   $O->{reshape_inc} ||= 80_000;
   $O->{type}        ||= double;
   $O->{header}      ||= 0;
+  ###$O->{detect_datetime} = 1 if !defined $O->{detect_datetime} && !NODATETIME;
   $O->{debug} = DEBUG unless defined $O->{debug};
 
   # reshape_inc cannot be lower than fetch_chunk
