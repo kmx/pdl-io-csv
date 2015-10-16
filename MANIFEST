@@ -8,5 +8,7 @@ t/_sample1.csv
 t/_sample1_crlf.csv
 t/_sample2.csv
 t/_sample3.csv
+t/_sample4.csv
 t/basic.t
 t/compile.t
+t/datetime.t

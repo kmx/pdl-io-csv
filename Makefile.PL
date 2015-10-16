@@ -23,13 +23,20 @@ WriteMakefile(
         'Test::Number::Delta' => '1.06',  # versions before 1.06 have buggy relative mode
   },
   META_MERGE => {
+      prereqs => {
+        runtime => {
+          recommends => {
+            'PDL::DateTime' => 0,
+            'Time::Moment'  => '0.12',  # we need: lenient ISO 8601 parsing
+          },
+        },
+      },
       resources    => {
-          repository   => 'https://github.com/kmx/pdl-io-csv',
+        repository   => 'https://github.com/kmx/pdl-io-csv',
       },
   },
   dist => {
       ($^O eq 'MSWin32' ? (TAR => 'ptar', TARFLAGS => '-c -C -f') : ()),
-      #PREOP => 'pod2text lib/PDL/IO/CSV.pm > README'
       PREOP => 'perldoc -u lib/PDL/IO/CSV.pm | pod2markdown > README.md',
   },
 );
