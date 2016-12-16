@@ -50,7 +50,7 @@ if (!NO64BITINT) {
   my $t1  = rcsv2D('t/_sample1.csv');
   my $t1h = rcsv2D('t/_sample1_crlf.csv');
   my @p1  = rcsv1D('t/_sample1.csv');
-  
+  is(scalar @p1, 7);
   is($p1[0]->info,  "PDL: Double D [5]",   '$p1[0]->info');
   is($p1[1]->info,  "PDL: Double D [5]",   '$p1[1]->info');
   is($p1[2]->info,  "PDL: Double D [5]",   '$p1[2]->info');

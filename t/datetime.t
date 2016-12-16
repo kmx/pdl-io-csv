@@ -16,7 +16,7 @@ if (NODATETIME) {
 }
 else {
   # http://ichart.finance.yahoo.com/table.csv?a=8&b=11&e=10&g=d&c=2009&d=2&f=2010&s=YHOO
-  my ($Date, $Open, $High, $Low, $Close, $Volume, $AdjClose) = rcsv1D('t/_sample4.csv', { header=>1, detect_datetime=>1});
+  my ($Date, $Open, $High, $Low, $Close, $Volume, $AdjClose) = rcsv1D('t/_sample4.csv', { header=>1 });
   is(ref $Date, 'PDL::DateTime');
   is($Date->info, 'PDL::DateTime: LongLong D [124]');
   is($Date->hdr->{col_name}, 'Date');
@@ -49,7 +49,7 @@ MARKER
 2.5,1.5,1955-12-12T23:25:55.123999
 MARKER
 
-  my ($px, $py, $pz) = rcsv1D(\<<'MARKER', { header=>'auto', detect_datetime=>1 });
+  my ($px, $py, $pz) = rcsv1D(\<<'MARKER');
 "col x",,"col z"
 0.5,1.5,1955-12-12T23:23:55.123999
 1.5,1.5,1955-12-12T23:24:55.123999
@@ -64,4 +64,29 @@ MARKER
   is($pz->hdr->{col_name}, "col z");
 }
 
+{
+    my ($px, $py) = rcsv1D(\<<'MARKER', { header=>'auto', detect_datetime=>'%m/%d/%Y' });
+Date,Adj Close
+3/31/1993,1.13
+4/1/1993,1.15
+5/3/1993,1.43
+MARKER
+
+  is("$py", "[1.13 1.15 1.43]");
+  is("$px", "[ 1993-03-31 1993-04-01 1993-05-03 ]");
+
+}
+
+{
+    my ($px, $py) = rcsv1D(\<<'MARKER', { type =>[ '%m/%d/%Y', double ] });
+Date,Adj Close
+3/31/1993,1.13
+4/1/1993,1.15
+5/3/1993,1.43
+MARKER
+
+  is("$py", "[1.13 1.15 1.43]");
+  is("$px", "[ 1993-03-31 1993-04-01 1993-05-03 ]");
+
+}
 done_testing;

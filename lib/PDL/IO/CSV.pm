@@ -8,7 +8,7 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK   = qw(rcsv1D rcsv2D wcsv1D wcsv2D);
 our %EXPORT_TAGS = (all => \@EXPORT_OK);
 
-our $VERSION = '0.007_01';
+our $VERSION = '0.008';
 
 use Config;
 use constant NO64BITINT => ($Config{ivsize} < 8) ? 1 : 0;
@@ -18,6 +18,8 @@ use constant DEBUG      => $ENV{PDL_IO_CSV_DEBUG} ? 1 : 0;
 use PDL;
 use Text::CSV_XS;
 use Scalar::Util qw(looks_like_number openhandle blessed);
+use POSIX qw();
+use Time::Piece;
 
 use Carp;
 $Carp::Internal{ (__PACKAGE__) }++;
@@ -43,7 +45,7 @@ my %pck = (
 );
 
 sub wcsv1D {
-  my ($fh, $O, $C) = _proc_wargs(@_);
+  my ($fh, $O, $C) = _proc_wargs('1D', @_);
 
   my $cols = 0;
   my $rows = 0;
@@ -81,7 +83,8 @@ sub wcsv1D {
 
   my $csv = Text::CSV_XS->new($C) or croak "" . Text::CSV_XS->error_diag();
   if ($O->{header}) {
-    croak "FATAL: wrong header (expected $cols items)" if $cols != scalar @{$O->{header}};
+    my $count = scalar @{$O->{header}};
+    croak "FATAL: wrong header (expected $cols items, got $count)" if $cols != $count;
     $csv->print($fh, $O->{header});
   }
   for my $r (0..$rows-1) {
@@ -110,7 +113,7 @@ sub wcsv1D {
 
 sub wcsv2D {
   my $pdl = shift;
-  my ($fh, $O, $C) = _proc_wargs(@_);
+  my ($fh, $O, $C) = _proc_wargs('2D', @_);
 
   croak "FATAL: wcsv2D() expects 2D piddle" unless $pdl->ndims == 2;
   my $p = $pdl->transpose;
@@ -153,7 +156,7 @@ sub wcsv2D {
 }
 
 sub rcsv1D {
-  my ($fh, $coli, $O, $C) = _proc_rargs(@_);
+  my ($fh, $coli, $O, $C) = _proc_rargs('1D', @_);
 
   my ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $c_idx, $c_dt, $allocated, $cols); # initialize after we get 1st line
 
@@ -191,7 +194,15 @@ sub rcsv1D {
       if (defined $r) {
         if (defined $headerdetection) {
           my $numeric = 0;
-          for (@$r) { $numeric++ if looks_like_number($_) || (!NODATETIME && defined PDL::DateTime::dt2ll($_)) }
+          for (@$r) {
+            if (looks_like_number($_)) {
+              $numeric++;
+            }
+            elsif (!NODATETIME) {
+              my $v = $O->{strptime} ? _strptime($_, $O->{strptime}) : PDL::DateTime::dt2ll($_);
+              $numeric++ if defined $v;
+            }
+          }
           if ($numeric == 0) {
             # no numeric values found => skip this line but keep it as a potential header
             $headerline = $r;
@@ -222,7 +233,7 @@ sub rcsv1D {
         if (defined $c_dt) {
           for (0..$cols-1) {
             next unless defined $c_dt->[$_];
-            my $v = PDL::DateTime::dt2ll($r->[$_]);
+            my $v = $c_dt->[$_] ne 'datetime' ? _strptime($r->[$_], $c_dt->[$_]) : PDL::DateTime::dt2ll($r->[$_]);
             if (defined $v) {
               $r->[$_] = $v;
             }
@@ -304,7 +315,7 @@ sub rcsv1D {
 }
 
 sub rcsv2D {
-  my ($fh, $coli, $O, $C) = _proc_rargs(@_);
+  my ($fh, $coli, $O, $C) = _proc_rargs('2D', @_);
 
   my ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $allocated, $cols);
 
@@ -426,6 +437,7 @@ sub _dbg_msg {
 sub _proc_wargs {
   my $options        = ref $_[-1] eq 'HASH' ? pop : {};
   my $filename_or_fh = !blessed $_[-1] || !$_[-1]->isa('PDL') ? pop : undef;
+  my $fn = shift;
 
   my $C = { %$options }; # make a copy
 
@@ -433,6 +445,7 @@ sub _proc_wargs {
   my $O = { map { $_ => delete $C->{$_} } @keys };
   $O->{debug}     = DEBUG unless defined $O->{debug};
   $O->{bad2empty} = 1     unless defined $O->{bad2empty};
+  $O->{header}    = ($fn eq '1D' ? 'auto' : 0) if !defined $O->{header};
 
   # explicitely set
   $C->{sep_char} = ','  unless defined $C->{sep_char};
@@ -468,7 +481,7 @@ sub _proc_wargs {
 
 sub _proc_rargs {
   my $options = ref $_[-1] eq 'HASH' ? pop : {};
-  my ($filename_or_fh, $coli) = @_;
+  my ($fn, $filename_or_fh, $coli) = @_;
 
   croak "FATAL: invalid column ids" if defined $coli && ref $coli ne 'ARRAY';
   croak "FATAL: invalid filename"   unless defined $filename_or_fh;
@@ -479,9 +492,13 @@ sub _proc_rargs {
   my $O = { map { $_ => delete $C->{$_} } @keys };
   $O->{fetch_chunk} ||= 40_000;
   $O->{reshape_inc} ||= 80_000;
-  $O->{type}        ||= double;
-  $O->{header}      ||= 0;
-  ###$O->{detect_datetime} = 1 if !defined $O->{detect_datetime} && !NODATETIME;
+  $O->{type}        ||= ($fn eq '1D' ? 'auto' : double);
+  $O->{header}      ||= ($fn eq '1D' ? 'auto' : 0);
+  $O->{detect_datetime} = 1 unless defined $O->{detect_datetime};
+  if ($O->{detect_datetime} =~ /%/) {
+    $O->{strptime} = $O->{detect_datetime};
+    $O->{detect_datetime} = 1;
+  }
   $O->{debug} = DEBUG unless defined $O->{debug};
 
   # reshape_inc cannot be lower than fetch_chunk
@@ -532,8 +549,7 @@ sub _init_1D {
   my @c_idx;
 
   if (ref $O->{type} eq 'ARRAY') {
-    @c_type = @{$O->{type}};
-    push @c_type, ((double) x ($cols - @c_type));
+    $c_type[$_] = $O->{type}->[$_] for (0..$cols-1);
   }
   else {
     $c_type[$_] = $O->{type} for (0..$cols-1);
@@ -541,18 +557,27 @@ sub _init_1D {
 
   my @c_dt;
   for (0..$cols-1) {
-    if ($c_type[$_] eq 'datetime') {
-      croak "PDL::DateTime not installed" if NODATETIME;
-      $c_type[$_] = longlong;
-      $c_dt[$_] = 'datetime';
-    }
-    elsif ($O->{detect_datetime}) {
-      croak "PDL::DateTime not installed" if NODATETIME;
-      if (defined PDL::DateTime::dt2ll($firstline->[$_])) {
-        $c_type[$_] = longlong;
-        $c_dt[$_] = 'datetime';
+    if (!defined $c_type[$_] || $c_type[$_] eq 'auto') {
+      $c_type[$_] = undef;
+      if ($O->{detect_datetime}) {
+        croak "PDL::DateTime not installed" if NODATETIME;
+        my $v = $O->{strptime} ? _strptime($firstline->[$_], $O->{strptime}) : PDL::DateTime::dt2ll($firstline->[$_]);
+        if (defined $v) {
+          $c_dt[$_] = $O->{strptime} ? $O->{strptime} : 'datetime';
+          $c_type[$_] = longlong;
+        }
       }
     }
+    elsif ($c_type[$_] eq 'datetime') {
+      croak "PDL::DateTime not installed" if NODATETIME;
+      $c_dt[$_] = 'datetime';
+      $c_type[$_] = longlong;
+    }
+    elsif ($c_type[$_] =~ /%/) {
+      $c_dt[$_] = $c_type[$_]; # strptime format
+      $c_type[$_] = longlong;
+    }
+    $c_type[$_] = double if !$c_type[$_];
   }
 
   my $allocated = $O->{reshape_inc};
@@ -603,15 +628,9 @@ sub _init_2D {
   return ($c_type, $c_pack, $c_sizeof, $c_pdl, $c_bad, $c_dataref, $allocated, $cols);
 }
 
-sub _fix_datetime_value {
-  my $v = shift;
-  # '2015-12-29' > '2015-12-29T00Z'
-  return $v."T00Z" if $v =~ /^\d\d\d\d-\d\d-\d\d$/;
-  # '2015-12-29 11:59' > '2015-12-29 11:59Z'
-  return $v."Z"    if $v =~ /^\d\d\d\d-\d\d-\d\d[ T]\d\d:\d\d$/;
-  # '2015-12-29 11:59:11' > '2015-12-29 11:59:11Z' or '2015-12-29 11:59:11.123' > '2015-12-29 11:59:11.123Z'
-  return $v."Z"    if $v =~ /^\d\d\d\d-\d\d-\d\d[ T]\d\d:\d\d:\d\d(\.\d+)?$/;
-  return $v;
+sub _strptime {
+  my ($string, $format) = @_;
+  return eval { int POSIX::floor(Time::Piece->strptime($string, $format)->epoch * 1_000_000 + 0.5) };
 }
 
 1;
@@ -707,14 +726,23 @@ Special datetime handling (you need to have L<PDL::DateTime> installed):
   my ($a, $b, $c) = rcsv1D($csv, {type => [long, 'datetime', double]});
   # piddle $b will be an instance of PDL::DateTime
 
+or
+
+  my ($a, $b, $c) = rcsv1D($csv, {type => [long, '%m/%d/%Y', double]});
+  # piddle $b will be an instance of PDL::DateTime
+
 or you cat let PDL::IO::CSV try to detect datetime columns (detection is based only on the first csv line)
 
   my ($a, $b, $c) = rcsv1D($csv, {detect_datetime=>1});
 
 =item * detect_datetime
 
-Values C<0> (default) or C<1>. Try to detect datetime columns, corresponding output piddles will be
+Values C<1> (default) or C<0>. Try to detect datetime columns, corresponding output piddles will be
 instances of L<PDL::Datetime> (which you need to have installed).
+
+Value C<1> means: try to detect datetime in ISO8601 format, e.g. C<'2016-12-16 11:59'>.
+
+You can also specify a value as strptime format string, e.g. C<'%m/%d/%Y %H:%M:%S'>.
 
 =item * fetch_chunk
 
@@ -742,13 +770,15 @@ values are silently converted into C<0>.
 
 =item * header
 
-Values C<0> (default) or C<N> (positive integer) - consider the first C<N> lines as headers and skip them.
+Values C<0> or C<N> (positive integer) - consider the first C<N> lines as headers and skip them.
 BEWARE: we are talking here about skipping CSV lines which in some cases might be more than 1 text line.
 
 NOTE: header values (if any) are considered to be column names and are stored in loaded piddles in $pdl->hdr->{col_name}
 
 NOTE: C<rcsv1D> accepts a special C<header> value C<'auto'> which skips rows (from beginning) that have
 in all columns non-numeric values.
+
+Default: for C<rcsv1D> - C<'auto'>; for C<rcsv2D> - C<0>.
 
 =item * decimal_comma
 
@@ -823,6 +853,8 @@ Items supported in B<options> hash:
 
 Arrayref with values that will be printed as the first CSV line. Or C<'auto'> value which means that column
 names are taken from $pdl->hdr->{col_name}.
+
+Default: for C<wcsv1D> - C<'auto'>; for C<wcsv2D> - C<undef>.
 
 =item * bad2empty
 

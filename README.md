@@ -81,14 +81,23 @@ Items supported in **options** hash:
         my ($a, $b, $c) = rcsv1D($csv, {type => [long, 'datetime', double]});
         # piddle $b will be an instance of PDL::DateTime
 
+    or
+
+        my ($a, $b, $c) = rcsv1D($csv, {type => [long, '%m/%d/%Y', double]});
+        # piddle $b will be an instance of PDL::DateTime
+
     or you cat let PDL::IO::CSV try to detect datetime columns (detection is based only on the first csv line)
 
         my ($a, $b, $c) = rcsv1D($csv, {detect_datetime=>1});
 
 - detect\_datetime
 
-    Values `0` (default) or `1`. Try to detect datetime columns, corresponding output piddles will be
+    Values `1` (default) or `0`. Try to detect datetime columns, corresponding output piddles will be
     instances of [PDL::Datetime](https://metacpan.org/pod/PDL::Datetime) (which you need to have installed).
+
+    Value `1` means: try to detect datetime in ISO8601 format, e.g. `'2016-12-16 11:59'`.
+
+    You can also specify a value as strptime format string, e.g. `'%m/%d/%Y %H:%M:%S'`.
 
 - fetch\_chunk
 
@@ -116,13 +125,15 @@ Items supported in **options** hash:
 
 - header
 
-    Values `0` (default) or `N` (positive integer) - consider the first `N` lines as headers and skip them.
+    Values `0` or `N` (positive integer) - consider the first `N` lines as headers and skip them.
     BEWARE: we are talking here about skipping CSV lines which in some cases might be more than 1 text line.
 
     NOTE: header values (if any) are considered to be column names and are stored in loaded piddles in $pdl->hdr->{col\_name}
 
     NOTE: `rcsv1D` accepts a special `header` value `'auto'` which skips rows (from beginning) that have
     in all columns non-numeric values.
+
+    Default: for `rcsv1D` - `'auto'`; for `rcsv2D` - `0`.
 
 - decimal\_comma
 
@@ -189,6 +200,8 @@ Items supported in **options** hash:
 
     Arrayref with values that will be printed as the first CSV line. Or `'auto'` value which means that column
     names are taken from $pdl->hdr->{col\_name}.
+
+    Default: for `wcsv1D` - `'auto'`; for `wcsv2D` - `undef`.
 
 - bad2empty
 

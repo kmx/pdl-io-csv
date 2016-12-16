@@ -11,14 +11,12 @@ WriteMakefile(
   PREREQ_PM     => {
         'PDL'          => '2.006', # we need: unpdl
         'Text::CSV_XS' => 0,
-        'Scalar::Util' => 0,
-        'Exporter'     => '5.59',  # we need: use Exporter 'import';
+        'Exporter'     => '5.57',  # we need: use Exporter 'import';
   },
   BUILD_REQUIRES => {
         'PDL'                 => '2.006', # we need: unpdl
         'Text::CSV_XS'        => 0,
-        'Scalar::Util'        => 0,
-        'Exporter'            => '5.59',  # we need: use Exporter 'import';
+        'Exporter'            => '5.57',  # we need: use Exporter 'import';
         'Test::More'          => '0.88',  # we need: done_testing()
         'Test::Number::Delta' => '1.06',  # versions before 1.06 have buggy relative mode
   },
@@ -28,15 +26,17 @@ WriteMakefile(
           recommends => {
             'PDL::DateTime' => 0,
             'Time::Moment'  => '0.12',  # we need: lenient ISO 8601 parsing
+            'Time::Piece'   => 0,
           },
         },
       },
       resources    => {
-        repository   => 'https://github.com/kmx/pdl-io-csv',
+        repository => 'https://github.com/kmx/pdl-io-csv',
+        bugtracker => 'https://github.com/kmx/pdl-io-csv/issues',
       },
   },
   dist => {
-      ($^O eq 'MSWin32' ? (TAR => 'ptar', TARFLAGS => '-c -C -f') : ()),
+      ($^O eq 'MSWin32' ? (TAR => 'ptar', TARFLAGS => '-c -C -f') : (TARFLAGS => '--owner=0 --group=0 -cvf')),
       PREOP => 'perldoc -u lib/PDL/IO/CSV.pm | pod2markdown > README.md',
   },
 );
