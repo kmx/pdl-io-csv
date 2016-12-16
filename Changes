@@ -1,5 +1,8 @@
 Changes for PDL::IO::CSV
 
+0.009   2016/12/16
+        - Makefile.PL tuning
+
 0.008   2016/12/16
         - rcsv1D: datetime_detect - improved & default switched to 1
         - rcsv1D: header - default switched to 'auto'
