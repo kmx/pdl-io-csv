@@ -1,5 +1,10 @@
 Changes for PDL::IO::CSV
 
+0.008   2016/12/16
+        - rcsv1D: datetime_detect - improved & default switched to 1
+        - rcsv1D: header - default switched to 'auto'
+        - rcsv1D: type - datetime time can be specified as strptime format string
+
 0.007   2015/10/16
         - rcsv1D: PDL::DateTime support - see type=>'datetime' + detect_datetime=>1
         - wcsv1D: PDL::DateTime support
