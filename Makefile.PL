@@ -8,6 +8,7 @@ WriteMakefile(
   VERSION_FROM  => 'lib/PDL/IO/CSV.pm',
   ABSTRACT_FROM => 'lib/PDL/IO/CSV.pm',
   LICENSE       => 'perl',
+  MIN_PERL_VERSION => '5.008',
   PREREQ_PM     => {
         'PDL'          => '2.006', # we need: unpdl
         'Text::CSV_XS' => 0,
