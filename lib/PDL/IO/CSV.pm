@@ -494,10 +494,12 @@ sub _proc_rargs {
   $O->{reshape_inc} ||= 80_000;
   $O->{type}        ||= ($fn eq '1D' ? 'auto' : double);
   $O->{header}      ||= ($fn eq '1D' ? 'auto' : 0);
-  $O->{detect_datetime} = 1 unless defined $O->{detect_datetime};
-  if ($O->{detect_datetime} =~ /%/) {
-    $O->{strptime} = $O->{detect_datetime};
-    $O->{detect_datetime} = 1;
+  if (!NODATETIME) {
+    $O->{detect_datetime} = 1 if !defined $O->{detect_datetime};
+    if ($O->{detect_datetime} =~ /%/) {
+      $O->{strptime} = $O->{detect_datetime};
+      $O->{detect_datetime} = 1;
+    }
   }
   $O->{debug} = DEBUG unless defined $O->{debug};
 

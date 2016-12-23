@@ -62,9 +62,8 @@ MARKER
   is($px->hdr->{col_name}, "col x");
   is($py->hdr->{col_name}, undef);
   is($pz->hdr->{col_name}, "col z");
-}
 
-{
+  {
     my ($px, $py) = rcsv1D(\<<'MARKER', { header=>'auto', detect_datetime=>'%m/%d/%Y' });
 Date,Adj Close
 3/31/1993,1.13
@@ -72,12 +71,11 @@ Date,Adj Close
 5/3/1993,1.43
 MARKER
 
-  is("$py", "[1.13 1.15 1.43]");
-  is("$px", "[ 1993-03-31 1993-04-01 1993-05-03 ]");
-
-}
-
-{
+    is("$py", "[1.13 1.15 1.43]");
+    is("$px", "[ 1993-03-31 1993-04-01 1993-05-03 ]");
+  
+  }
+  {
     my ($px, $py) = rcsv1D(\<<'MARKER', { type =>[ '%m/%d/%Y', double ] });
 Date,Adj Close
 3/31/1993,1.13
@@ -85,8 +83,11 @@ Date,Adj Close
 5/3/1993,1.43
 MARKER
 
-  is("$py", "[1.13 1.15 1.43]");
-  is("$px", "[ 1993-03-31 1993-04-01 1993-05-03 ]");
+    is("$py", "[1.13 1.15 1.43]");
+    is("$px", "[ 1993-03-31 1993-04-01 1993-05-03 ]");
+  
+  }
 
 }
+
 done_testing;
