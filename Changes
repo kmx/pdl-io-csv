@@ -1,5 +1,8 @@
 Changes for PDL::IO::CSV
 
+0.010   2016/12/23
+        - fix: tests fail without PDL::DateTime #1
+
 0.009   2016/12/16
         - Makefile.PL tuning
 

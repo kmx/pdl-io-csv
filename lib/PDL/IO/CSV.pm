@@ -8,7 +8,7 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK   = qw(rcsv1D rcsv2D wcsv1D wcsv2D);
 our %EXPORT_TAGS = (all => \@EXPORT_OK);
 
-our $VERSION = '0.009';
+our $VERSION = '0.010';
 
 use Config;
 use constant NO64BITINT => ($Config{ivsize} < 8) ? 1 : 0;
